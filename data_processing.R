@@ -143,7 +143,7 @@ registerDoMC(cores = 2)
 ## Same pre-processing country by country
 
 ### download individual data -----------------------
-cou <- "A"
+cou <- "B"
 # training
 download.file(paste0("https://s3.amazonaws.com/drivendata/data/50/public/",cou,"_indiv_train.csv"), "indiv_train.csv")
 indiv_train <- fread("indiv_train.csv", stringsAsFactors = TRUE)

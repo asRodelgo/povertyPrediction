@@ -58,7 +58,7 @@ final_predictions <- predict(classifier, input_fn = poor_input_fn(test_all_poor[
 submission_file <- tibble(id = test_all_poor$id, 
                           country = 'A',
                           poor = as.numeric(final_predictions$logistic))
-
+pov_keras1_A <- submission_file
 
 
 
