@@ -56,7 +56,7 @@ table(preds_df$test_class,preds_df$pred_class)
 test_all_poor <- mutate(test_all, poor = 0)
 final_predictions <- predict(classifier, input_fn = poor_input_fn(test_all_poor[,-1]))
 submission_file <- tibble(id = test_all_poor$id, 
-                          country = 'A',
+                          country = cou,
                           poor = as.numeric(final_predictions$logistic))
 pov_keras1_A <- submission_file
 

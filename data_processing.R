@@ -143,7 +143,7 @@ registerDoMC(cores = 2)
 ## Same pre-processing country by country
 
 ### download individual data -----------------------
-cou <- "B"
+cou <- "C"
 # training
 download.file(paste0("https://s3.amazonaws.com/drivendata/data/50/public/",cou,"_indiv_train.csv"), "indiv_train.csv")
 indiv_train <- fread("indiv_train.csv", stringsAsFactors = TRUE)
@@ -177,13 +177,15 @@ indiv_all_dummy <- cbind(indiv_all_ids,dummies_pred) %>%
 nzv <- nearZeroVar(indiv_all_dummy)
 indiv_all_nzv <- indiv_all_dummy[, -nzv]
 indiv_all_nzv <- select(indiv_all_nzv, -iid)
+# impute NAs in numeric variables
+indiv_all_nzv2 <- mutate_all(indiv_all_nzv, funs(ifelse(is.na(.),mean(.,na.rm=TRUE),.)))
 # highly correlated predictors
-descrCor <- cor(select_if(indiv_all_nzv, is.numeric))
+descrCor <- cor(select_if(indiv_all_nzv2, is.numeric))
 summary(descrCor[upper.tri(descrCor)])
 highlyCorDescr <- findCorrelation(descrCor, cutoff = .75)
 #indiv_all_corr <- indiv_all_nzv[,-highlyCorDescr]
-indiv_all_corr <- select_if(indiv_all_nzv, is.numeric)[,-highlyCorDescr] %>%
-   cbind(select_if(indiv_all_nzv, is.character))
+indiv_all_corr <- select_if(indiv_all_nzv2, is.numeric)[,-highlyCorDescr] %>%
+   cbind(select_if(indiv_all_nzv2, is.character))
 
 # linear dependencies
 comboInfo <- findLinearCombos(select_if(indiv_all_corr, is.numeric))
@@ -197,6 +199,12 @@ indiv_all_aggr <- indiv_all_ldep %>%
   mutate(id = as.character(id)) %>%
   group_by(id) %>%
   summarise_all(mean)
+# scale variables to [0,1]
+maxs <- apply(select_if(indiv_all_aggr, is.numeric), 2, max) 
+mins <- apply(select_if(indiv_all_aggr, is.numeric), 2, min) 
+indiv_all_aggr <- as.data.frame(scale(select_if(indiv_all_aggr, is.numeric), center = mins, scale = maxs - mins)) %>%
+  cbind(select_if(indiv_all_aggr, is.character))
+
 # split it back into train and test
 train_indiv <- merge(indiv_train_ids_class, indiv_all_aggr, by = "id")
 test_indiv <- merge(distinct(indiv_test, id) %>% mutate(id = as.character(id)) , indiv_all_aggr, by = "id")
@@ -222,12 +230,14 @@ hhold_all_dummy <- cbind(id = hhold_all_ids,dummies_pred) %>%
 # zero & near-zero variance
 nzv <- nearZeroVar(hhold_all_dummy)
 hhold_all_nzv <- hhold_all_dummy[, -nzv]
+# impute NAs in numeric variables
+hhold_all_nzv2 <- mutate_all(hhold_all_nzv, funs(ifelse(is.na(.),mean(.,na.rm=TRUE),.)))
 # highly correlated predictors
-descrCor <- cor(select_if(hhold_all_nzv, is.numeric))
+descrCor <- cor(select_if(hhold_all_nzv2, is.numeric))
 summary(descrCor[upper.tri(descrCor)])
 highlyCorDescr <- findCorrelation(descrCor, cutoff = .75)
-hhold_all_corr <- select_if(hhold_all_nzv, is.numeric)[,-highlyCorDescr] %>%
-  cbind(select_if(hhold_all_nzv, is.character))
+hhold_all_corr <- select_if(hhold_all_nzv2, is.numeric)[,-highlyCorDescr] %>%
+  cbind(select_if(hhold_all_nzv2, is.character))
 
 # linear dependencies
 comboInfo <- findLinearCombos(select_if(hhold_all_corr, is.numeric))
@@ -236,6 +246,12 @@ if (!is.null(comboInfo$remove)) {
 } else {
   hhold_all_ldep <- hhold_all_corr
 }
+# scale variables to [0,1]
+maxs <- apply(select_if(hhold_all_ldep, is.numeric), 2, max) 
+mins <- apply(select_if(hhold_all_ldep, is.numeric), 2, min) 
+hhold_all_ldep <- as.data.frame(scale(select_if(hhold_all_ldep, is.numeric), center = mins, scale = maxs - mins)) %>%
+  cbind(select_if(hhold_all_ldep, is.character))
+
 # split it back into train and test
 train_hhold <- merge(hhold_train_ids_class, hhold_all_ldep, by = "id")
 test_hhold <- merge(distinct(hhold_test, id) %>% mutate(id = as.character(id)) , hhold_all_ldep, by = "id")
@@ -243,5 +259,25 @@ test_hhold <- merge(distinct(hhold_test, id) %>% mutate(id = as.character(id)) ,
 # put indiv and hhold together
 train_all <- merge(train_hhold,train_indiv, by = c("id","poor"))
 test_all <- merge(test_hhold,test_indiv, by = c("id"))
+
+# check for class imbalance
+table(train_all$poor)
+# B and C countries have imbalanced classes. I'll sample from the dominant class
+if (!(cou == "A")) {
+  set.seed(123)
+  sample0 <- sample_n(filter(train_all, poor == 0), table(train_all$poor)[[2]])
+  train_all <- bind_rows(sample0,filter(train_all, poor == 1))
+  table(train_all$poor)
+}
+
+# Another option is to repeat observations from the smaller class
+# rep_times <- floor(table(train_all$poor)[[1]]/table(train_all$poor)[[2]])
+# set.seed(123)
+# train_all <- bind_rows(filter(train_all, poor == 0), filter(train_all, poor == 1),
+#                        filter(train_all, poor == 1),filter(train_all, poor == 1),
+#                        filter(train_all, poor == 1),filter(train_all, poor == 1))
+# table(train_all$poor)
+
+
 
 
